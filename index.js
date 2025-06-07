@@ -1,32 +1,14 @@
- ohtivx-codex/add-welcome-message-function
-const {
-
- pwojb8-codex/add-welcome-message-function
-import {
- main
   Client,
   GatewayIntentBits,
   REST,
   Routes,
   SlashCommandBuilder
- ohtivx-codex/add-welcome-message-function
-} = require('discord.js');
-const dotenv = require('dotenv');
-
-} from 'discord.js';
-import { Client, GatewayIntentBits } from 'discord.js';
- main
-import dotenv from 'dotenv';
- main
 
 dotenv.config();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
- ohtivx-codex/add-welcome-message-function
 
- pwojb8-codex/add-welcome-message-function
- main
 const commands = [
   new SlashCommandBuilder()
     .setName('test-welcome')
@@ -56,12 +38,6 @@ client.once('ready', async () => {
   } catch (err) {
     console.error('Failed to register slash commands:', err);
   }
- ohtivx-codex/add-welcome-message-function
-
-client.once('ready', () => {
-  console.log(`Logged in as ${client.user.tag}`);
- main
- main
 });
 
 client.on('guildMemberAdd', member => {
@@ -73,10 +49,6 @@ client.on('guildMemberAdd', member => {
   }
 });
 
- ohtivx-codex/add-welcome-message-function
-
- pwojb8-codex/add-welcome-message-function
- main
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === 'test-welcome') {
@@ -97,14 +69,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 });
- ohtivx-codex/add-welcome-message-function
 
-const token = process.env.DISCORD_TOKEN;
-if (!token) {
-  console.error('DISCORD_TOKEN is not set. Please add it to your .env file.');
-  process.exit(1);
-}
- main
- main
 
 client.login(token);
