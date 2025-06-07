@@ -6,7 +6,6 @@ import {
   Routes,
   SlashCommandBuilder
 } from 'discord.js';
-=======
 import { Client, GatewayIntentBits } from 'discord.js';
  main
 import dotenv from 'dotenv';
@@ -45,7 +44,6 @@ client.once('ready', async () => {
   } catch (err) {
     console.error('Failed to register slash commands:', err);
   }
-=======
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
  main
@@ -81,7 +79,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 });
-=======
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
   console.error('DISCORD_TOKEN is not set. Please add it to your .env file.');
