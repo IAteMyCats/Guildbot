@@ -25,6 +25,7 @@ This repository contains a basic Discord bot written in Node.js using
    ```bash
    npm start
    ```
+
 If `GUILD_ID` is provided, the `/test-welcome` command will be registered for
 that server instantly. Without it, commands are registered globally and may take
 up to an hour to appear.

@@ -1,13 +1,14 @@
+
   Client,
   GatewayIntentBits,
   REST,
   Routes,
   SlashCommandBuilder
 
+
 dotenv.config();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
-
 
 const commands = [
   new SlashCommandBuilder()
