@@ -6,6 +6,8 @@ This repository contains a basic Discord bot written in Node.js using
 ## Features
 
 - Sends a configurable welcome message when a member joins the server.
+- Provides a `/test-welcome` slash command to send the welcome message for
+  testing purposes.
 
 ## Setup
 
