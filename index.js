@@ -1,3 +1,4 @@
+ pwojb8-codex/add-welcome-message-function
 import {
   Client,
   GatewayIntentBits,
@@ -5,12 +6,16 @@ import {
   Routes,
   SlashCommandBuilder
 } from 'discord.js';
+=======
+import { Client, GatewayIntentBits } from 'discord.js';
+ main
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
+ pwojb8-codex/add-welcome-message-function
 const commands = [
   new SlashCommandBuilder()
     .setName('test-welcome')
@@ -40,6 +45,10 @@ client.once('ready', async () => {
   } catch (err) {
     console.error('Failed to register slash commands:', err);
   }
+=======
+client.once('ready', () => {
+  console.log(`Logged in as ${client.user.tag}`);
+ main
 });
 
 client.on('guildMemberAdd', member => {
@@ -51,6 +60,7 @@ client.on('guildMemberAdd', member => {
   }
 });
 
+ pwojb8-codex/add-welcome-message-function
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === 'test-welcome') {
@@ -71,5 +81,12 @@ client.on('interactionCreate', async interaction => {
     }
   }
 });
+=======
+const token = process.env.DISCORD_TOKEN;
+if (!token) {
+  console.error('DISCORD_TOKEN is not set. Please add it to your .env file.');
+  process.exit(1);
+}
+ main
 
 client.login(token);
