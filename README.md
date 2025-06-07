@@ -8,6 +8,9 @@ This repository contains a basic Discord bot written in Node.js using
 - Sends a configurable welcome message when a member joins the server.
 - Provides a `/test-welcome` slash command to send the welcome message for
   testing purposes.
+- Allows users to set their birthdays with `/birthday` and lists upcoming
+  birthdays with `/birthdaylist`.
+- Celebrates birthdays automatically and offers `/test-birthday` for testing.
 
 ## Setup
 
@@ -20,6 +23,8 @@ This repository contains a basic Discord bot written in Node.js using
    - `DISCORD_TOKEN` &ndash; your bot token
    - `WELCOME_CHANNEL_ID` &ndash; ID of the channel where welcome messages
      should be sent
+   - `BIRTHDAY_CHANNEL_ID` &ndash; channel for birthday announcements (falls
+     back to `WELCOME_CHANNEL_ID` if not set)
    - `GUILD_ID` &ndash; ID of your Discord server for registering slash commands
 3. Run the bot:
    ```bash
@@ -30,5 +35,4 @@ If `GUILD_ID` is provided, the `/test-welcome` command will be registered for
 that server instantly. Without it, commands are registered globally and may take
 up to an hour to appear.
 
-The bot currently only implements the welcome message functionality.
-Additional features can be added easily.
+The bot currently supports welcome and birthday features with more to come.
