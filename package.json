@@ -2,6 +2,8 @@
   "name": "guildbot",
   "version": "1.0.0",
   "description": "Simple Discord bot.",
+  "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
