@@ -1,6 +1,6 @@
- pwojb8-codex/add-welcome-message-function
-import {
-  Client,
+const {
+} = require('discord.js');
+const dotenv = require('dotenv');
   GatewayIntentBits,
   REST,
   Routes,
