@@ -3,11 +3,14 @@ const {
   GatewayIntentBits,
   REST,
   Routes,
-  SlashCommandBuilder
+  SlashCommandBuilder,
+  EmbedBuilder
 } = require('discord.js');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
+const connect = require('./connect');
+const database = require('./database');
 
 dotenv.config();
 
@@ -21,11 +24,13 @@ try {
   birthdays = {};
 }
 
+database.init(client, birthdays, connect.connections);
+
 function saveBirthdays() {
   fs.writeFileSync(birthdaysPath, JSON.stringify(birthdays, null, 2));
 }
 
-const commands = [
+const commandBuilders = [
   new SlashCommandBuilder()
       .setName('test-welcome')
       .setDescription('Send the welcome message for the test user'),
@@ -47,7 +52,12 @@ const commands = [
   new SlashCommandBuilder()
       .setName('test-birthday')
       .setDescription('Send a test birthday message')
-].map(command => command.toJSON());
+];
+
+// Register commands from the connect module
+connect.registerCommands(commandBuilders);
+
+const commands = commandBuilders.map(command => command.toJSON());
 
 const birthdayMessages = [
   'Happy birthday {user}! You are now {age}! 🎉',
@@ -76,12 +86,21 @@ function formatDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
-function checkBirthdays() {
+function ordinalSuffix(n) {
+  const j = n % 10,
+      k = n % 100;
+  if (j === 1 && k !== 11) return `${n}st`;
+  if (j === 2 && k !== 12) return `${n}nd`;
+  if (j === 3 && k !== 13) return `${n}rd`;
+  return `${n}th`;
+}
+
+async function checkBirthdays() {
   const now = new Date();
   const today = `${now.getUTCMonth() + 1}-${now.getUTCDate()}`;
   const channelId = process.env.BIRTHDAY_CHANNEL_ID || process.env.WELCOME_CHANNEL_ID;
   if (!channelId) return;
-  const channel = client.channels.cache.get(channelId);
+  const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel) return;
   const year = now.getUTCFullYear();
   for (const [userId, b] of Object.entries(birthdays)) {
@@ -90,7 +109,10 @@ function checkBirthdays() {
       const msg = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)]
           .replace('{user}', `<@${userId}>`)
           .replace('{age}', age);
-      channel.send(msg);
+      const embed = new EmbedBuilder()
+          .setDescription(msg)
+          .setColor(0xffc0cb);
+      channel.send({ embeds: [embed] });
     }
   }
 }
@@ -102,7 +124,7 @@ function scheduleBirthdayCheck() {
     const today = formatDate(now);
     if (today !== lastDate) {
       lastDate = today;
-      checkBirthdays();
+      checkBirthdays().catch(() => {});
     }
   };
   run();
@@ -135,16 +157,21 @@ client.once('ready', async () => {
   scheduleBirthdayCheck();
 });
 
-client.on('guildMemberAdd', member => {
+client.on('guildMemberAdd', async member => {
   const channelId = process.env.WELCOME_CHANNEL_ID;
   if (!channelId) return;
-  const channel = member.guild.channels.cache.get(channelId);
+  const channel = await member.guild.channels.fetch(channelId).catch(() => null);
   if (channel) {
-    channel.send(`Welcome ${member} to this server!`);
+    const embed = new EmbedBuilder()
+        .setDescription(`Welcome ${member} to this server!`)
+        .setColor(0x00ff99);
+    channel.send({ embeds: [embed] });
   }
+  database.updateEntry(member);
 });
 
 client.on('interactionCreate', async interaction => {
+  if (await connect.handleInteraction(interaction)) return;
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === 'test-welcome') {
     const channelId = process.env.WELCOME_CHANNEL_ID;
@@ -154,10 +181,13 @@ client.on('interactionCreate', async interaction => {
         ephemeral: true
       });
     }
-    const channel = interaction.guild?.channels.cache.get(channelId);
+    const channel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
     if (channel) {
       const testUserId = '417984749685178370';
-      await channel.send(`Welcome <@${testUserId}> to this server!`);
+      const embed = new EmbedBuilder()
+          .setDescription(`Welcome <@${testUserId}> to this server!`)
+          .setColor(0x00ff99);
+      await channel.send({ embeds: [embed] });
       await interaction.reply({ content: 'Test welcome sent.', ephemeral: true });
     } else {
       await interaction.reply({ content: 'Welcome channel not found.', ephemeral: true });
@@ -171,6 +201,7 @@ client.on('interactionCreate', async interaction => {
     }
     birthdays[interaction.user.id] = { day, month, year };
     saveBirthdays();
+    database.updateEntry(interaction.member);
     await interaction.reply({ content: 'Birthday saved.', ephemeral: true });
   } else if (interaction.commandName === 'birthdaylist') {
     const now = new Date();
@@ -183,14 +214,22 @@ client.on('interactionCreate', async interaction => {
     if (list.length === 0) {
       return interaction.reply({ content: 'No birthdays set.', ephemeral: true });
     }
-    const lines = list.map(e => `${formatDate(e.next)} - <@${e.id}> turns ${e.age}`);
-    await interaction.reply({ content: lines.join('\n'), ephemeral: true });
+    const lines = list.map(e => {
+      const monthName = e.next.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+      const day = ordinalSuffix(e.next.getUTCDate());
+      return `${monthName} ${day}, <@${e.id}> turns ${e.age}`;
+    });
+    const embed = new EmbedBuilder()
+        .setTitle('Upcoming Birthdays')
+        .setDescription(lines.join('\n'))
+        .setColor(0x0099ff);
+    await interaction.reply({ embeds: [embed], ephemeral: true });
   } else if (interaction.commandName === 'test-birthday') {
     const channelId = process.env.BIRTHDAY_CHANNEL_ID || process.env.WELCOME_CHANNEL_ID;
     if (!channelId) {
       return interaction.reply({ content: 'No birthday channel configured.', ephemeral: true });
     }
-    const channel = interaction.guild?.channels.cache.get(channelId);
+    const channel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
     if (!channel) {
       return interaction.reply({ content: 'Birthday channel not found.', ephemeral: true });
     }
@@ -203,7 +242,10 @@ client.on('interactionCreate', async interaction => {
     const msg = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)]
         .replace('{user}', `<@${testUserId}>`)
         .replace('{age}', age);
-    await channel.send(msg);
+    const embed = new EmbedBuilder()
+        .setDescription(msg)
+        .setColor(0xffc0cb);
+    await channel.send({ embeds: [embed] });
     await interaction.reply({ content: 'Test birthday sent.', ephemeral: true });
   }
 });
