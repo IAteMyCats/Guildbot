@@ -1,15 +1,13 @@
-const {
   Client,
   GatewayIntentBits,
   REST,
   Routes,
   SlashCommandBuilder
-} = require('discord.js');
-const dotenv = require('dotenv');
 
 dotenv.config();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+
 
 const commands = [
   new SlashCommandBuilder()
@@ -71,5 +69,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 });
+
 
 client.login(token);
