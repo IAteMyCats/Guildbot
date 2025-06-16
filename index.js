@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const connect = require('./connect');
 const database = require('./database');
+const guildxp = require('./guildxp');
 
 dotenv.config();
 
@@ -24,7 +25,8 @@ try {
   birthdays = {};
 }
 
-database.init(client, birthdays, connect.connections);
+database.init(client, birthdays, connect.connections, guildxp.history);
+guildxp.init(client);
 
 function saveBirthdays() {
   fs.writeFileSync(birthdaysPath, JSON.stringify(birthdays, null, 2));
@@ -56,6 +58,7 @@ const commandBuilders = [
 
 // Register commands from the connect module
 connect.registerCommands(commandBuilders);
+guildxp.registerCommands(commandBuilders);
 
 const commands = commandBuilders.map(command => command.toJSON());
 
@@ -131,6 +134,18 @@ function scheduleBirthdayCheck() {
   setInterval(run, 60 * 60 * 1000);
 }
 
+async function refreshDatabase() {
+  const channelId = process.env.DATABASE_CHANNEL_ID;
+  if (!channelId) return;
+  const guild = client.guilds.cache.get(process.env.GUILD_ID) || client.guilds.cache.first();
+  if (!guild) return;
+  const members = await guild.members.fetch().catch(() => null);
+  if (!members) return;
+  for (const member of members.values()) {
+    await database.updateEntry(member);
+  }
+}
+
 let token = process.env.DISCORD_TOKEN;
 if (!token) {
   console.error('DISCORD_TOKEN is not set. Please add it to your .env file.');
@@ -155,6 +170,8 @@ client.once('ready', async () => {
     console.error('Failed to register slash commands:', err);
   }
   scheduleBirthdayCheck();
+  guildxp.scheduleWeeklyReport();
+  refreshDatabase();
 });
 
 client.on('guildMemberAdd', async member => {
@@ -172,6 +189,7 @@ client.on('guildMemberAdd', async member => {
 
 client.on('interactionCreate', async interaction => {
   if (await connect.handleInteraction(interaction)) return;
+  if (await guildxp.handleInteraction(interaction)) return;
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === 'test-welcome') {
     const channelId = process.env.WELCOME_CHANNEL_ID;
@@ -214,11 +232,16 @@ client.on('interactionCreate', async interaction => {
     if (list.length === 0) {
       return interaction.reply({ content: 'No birthdays set.', ephemeral: true });
     }
-    const lines = list.map(e => {
+    const lines = await Promise.all(list.map(async e => {
       const monthName = e.next.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
       const day = ordinalSuffix(e.next.getUTCDate());
-      return `${monthName} ${day}, <@${e.id}> turns ${e.age}`;
-    });
+      let name = 'Unknown';
+      try {
+        const user = await client.users.fetch(e.id);
+        name = user.username;
+      } catch {}
+      return `${monthName} ${day}, ${name} turns ${e.age}`;
+    }));
     const embed = new EmbedBuilder()
         .setTitle('Upcoming Birthdays')
         .setDescription(lines.join('\n'))

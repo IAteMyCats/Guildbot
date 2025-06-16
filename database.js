@@ -17,11 +17,13 @@ function saveMessages() {
 let client;
 let birthdays;
 let connections;
+let history;
 
-function init(c, birthdaysData, connectionsData) {
+function init(c, birthdaysData, connectionsData, historyData) {
     client = c;
     birthdays = birthdaysData;
     connections = connectionsData;
+    history = historyData;
 }
 
 async function updateEntry(member) {
@@ -40,6 +42,12 @@ async function updateEntry(member) {
         if (connection.rank) lines.push(`**Rank:** ${connection.rank}`);
         if (connection.inGuild !== undefined) {
             lines.push(`**Guild member:** ${connection.inGuild ? 'Yes' : 'No'}`);
+        }
+        if (history && connection.uuid && history[connection.uuid]) {
+            const monthly = history[connection.uuid].weeks
+                .slice(0, 4)
+                .reduce((a, b) => a + b, 0);
+            lines.push(`**Monthly GEXP:** ${monthly}`);
         }
     } else {
         lines.push('**Minecraft:** Not connected');
