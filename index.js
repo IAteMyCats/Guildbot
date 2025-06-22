@@ -4,7 +4,8 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
-  EmbedBuilder
+  EmbedBuilder,
+  PermissionFlagsBits
 } = require('discord.js');
 const dotenv = require('dotenv');
 const fs = require('fs');
@@ -12,10 +13,29 @@ const path = require('path');
 const connect = require('./connect');
 const database = require('./database');
 const guildxp = require('./guildxp');
+const giveaway = require('./giveaway');
 
 dotenv.config();
 
+const MOD_ROLE_ID = process.env.MODERATOR_ROLE_ID;
+const STAFF_ROLE_ID = process.env.STAFF_ROLE_ID;
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+
+// Prevent crashes from unexpected websocket or API errors
+client.on('error', err => console.error('Client error:', err));
+client.on('shardError', err => console.error('WebSocket error:', err));
+process.on('unhandledRejection', err => console.error('Unhandled promise rejection:', err));
+
+function safe(fn) {
+  return async (...args) => {
+    try {
+      await fn(...args);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+}
 
 const birthdaysPath = path.join(__dirname, 'birthdays.json');
 let birthdays = {};
@@ -27,6 +47,8 @@ try {
 
 database.init(client, birthdays, connect.connections, guildxp.history);
 guildxp.init(client);
+connect.init(client);
+giveaway.init(client);
 
 function saveBirthdays() {
   fs.writeFileSync(birthdaysPath, JSON.stringify(birthdays, null, 2));
@@ -59,6 +81,7 @@ const commandBuilders = [
 // Register commands from the connect module
 connect.registerCommands(commandBuilders);
 guildxp.registerCommands(commandBuilders);
+giveaway.registerCommands(commandBuilders);
 
 const commands = commandBuilders.map(command => command.toJSON());
 
@@ -171,10 +194,12 @@ client.once('ready', async () => {
   }
   scheduleBirthdayCheck();
   guildxp.scheduleWeeklyReport();
+  giveaway.scheduleExistingGiveaways();
+  connect.scheduleVerifyCheck();
   refreshDatabase();
 });
 
-client.on('guildMemberAdd', async member => {
+client.on('guildMemberAdd', safe(async member => {
   const channelId = process.env.WELCOME_CHANNEL_ID;
   if (!channelId) return;
   const channel = await member.guild.channels.fetch(channelId).catch(() => null);
@@ -185,13 +210,17 @@ client.on('guildMemberAdd', async member => {
     channel.send({ embeds: [embed] });
   }
   database.updateEntry(member);
-});
+}));
 
-client.on('interactionCreate', async interaction => {
+client.on('interactionCreate', safe(async interaction => {
   if (await connect.handleInteraction(interaction)) return;
   if (await guildxp.handleInteraction(interaction)) return;
+  if (await giveaway.handleInteraction(interaction)) return;
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === 'test-welcome') {
+    if (MOD_ROLE_ID && !interaction.member.roles.cache.has(MOD_ROLE_ID)) {
+      return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    }
     const channelId = process.env.WELCOME_CHANNEL_ID;
     if (!channelId) {
       return interaction.reply({
@@ -248,6 +277,9 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x0099ff);
     await interaction.reply({ embeds: [embed], ephemeral: true });
   } else if (interaction.commandName === 'test-birthday') {
+    if (MOD_ROLE_ID && !interaction.member.roles.cache.has(MOD_ROLE_ID)) {
+      return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    }
     const channelId = process.env.BIRTHDAY_CHANNEL_ID || process.env.WELCOME_CHANNEL_ID;
     if (!channelId) {
       return interaction.reply({ content: 'No birthday channel configured.', ephemeral: true });
@@ -271,6 +303,6 @@ client.on('interactionCreate', async interaction => {
     await channel.send({ embeds: [embed] });
     await interaction.reply({ content: 'Test birthday sent.', ephemeral: true });
   }
-});
+}));
 
 client.login(token);

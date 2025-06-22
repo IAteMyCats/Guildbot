@@ -5,6 +5,8 @@ const path = require('path');
 const connect = require('./connect');
 const database = require('./database');
 
+const MOD_ROLE_ID = process.env.MODERATOR_ROLE_ID;
+
 let client;
 let connections;
 let history = {};
@@ -221,6 +223,10 @@ function scheduleWeeklyReport() {
 async function handleInteraction(interaction) {
     if (!interaction.isChatInputCommand()) return false;
     if (interaction.commandName === 'test-guildxp') {
+        if (MOD_ROLE_ID && !interaction.member.roles.cache.has(MOD_ROLE_ID)) {
+            await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+            return true;
+        }
         try {
             await interaction.deferReply({ ephemeral: true });
             const reports = await createReport(false);
