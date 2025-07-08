@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const database = require('./database');
+const { parseRank, fetchWithRetry } = require('./hypixel');
 
 const MOD_ROLE_ID = process.env.MODERATOR_ROLE_ID;
 const STAFF_ROLE_ID = process.env.STAFF_ROLE_ID;
@@ -17,7 +18,11 @@ try {
 }
 
 function saveConnections() {
-    fs.writeFileSync(connectionsPath, JSON.stringify(connections, null, 2));
+    try {
+        fs.writeFileSync(connectionsPath, JSON.stringify(connections, null, 2));
+    } catch (err) {
+        console.error('Failed to save connections:', err);
+    }
 }
 
 function registerCommands(arr) {
@@ -55,27 +60,11 @@ function registerCommands(arr) {
     );
 }
 
-function parseRank(player) {
-    const rank = player?.rank || player?.monthlyPackageRank || player?.newPackageRank || player?.packageRank || '';
-    switch (rank) {
-        case 'SUPERSTAR':
-        case 'MVP_PLUS_PLUS':
-            return 'MVP++';
-        case 'MVP_PLUS':
-            return 'MVP+';
-        case 'MVP':
-            return 'MVP';
-        case 'VIP_PLUS':
-            return 'VIP+';
-        case 'VIP':
-            return 'VIP';
-        default:
-            return 'Unranked';
-    }
-}
 
 async function fetchUUID(username) {
-    const res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${username}`);
+    const res = await fetchWithRetry(
+        `https://api.mojang.com/users/profiles/minecraft/${username}`
+    );
     if (!res.ok) throw new Error('Failed to fetch UUID');
     const data = await res.json();
     if (!data || !data.id) throw new Error('Player not found');
@@ -83,14 +72,18 @@ async function fetchUUID(username) {
 }
 
 async function fetchPlayer(uuid, apiKey) {
-    const res = await fetch(`https://api.hypixel.net/player?key=${apiKey}&uuid=${uuid}`);
+    const res = await fetchWithRetry(
+        `https://api.hypixel.net/player?key=${apiKey}&uuid=${uuid}`
+    );
     const data = await res.json();
     if (!data.success) throw new Error('Failed to fetch player data');
     return data.player;
 }
 
 async function fetchGuild(uuid, apiKey) {
-    const res = await fetch(`https://api.hypixel.net/guild?player=${uuid}&key=${apiKey}`);
+    const res = await fetchWithRetry(
+        `https://api.hypixel.net/guild?player=${uuid}&key=${apiKey}`
+    );
     const data = await res.json();
     if (!data.success) return null;
     return data.guild;
@@ -131,11 +124,16 @@ async function connectMember(member, username) {
     const guild = await fetchGuild(uuid, apiKey);
     const guildName = (process.env.HYPIXEL_GUILD_NAME || 'Troopas Dynasty').toLowerCase();
     const inGuild = guild && guild.name && guild.name.toLowerCase() === guildName;
+    let joined = null;
+    if (inGuild) {
+        const m = guild.members.find(m => m.uuid === uuid);
+        if (m) joined = m.joined;
+    }
 
     await member.setNickname(username).catch(() => {});
     await applyRoles(member, rank, inGuild);
 
-    connections[member.id] = { username, uuid, rank, inGuild };
+    connections[member.id] = { username, uuid, rank, inGuild, joined };
     saveConnections();
     database.updateEntry(member);
     return { rank, inGuild };
@@ -277,12 +275,18 @@ async function verifyAll() {
             const username = player.displayname || conn.username;
             const g = await fetchGuild(conn.uuid, apiKey);
             const inGuild = g && g.name && g.name.toLowerCase() === guildName;
+            let joined = conn.joined;
+            if (inGuild && g) {
+                const m = g.members.find(m => m.uuid === conn.uuid);
+                if (m) joined = m.joined;
+            }
             if (rank !== conn.rank || username !== conn.username || inGuild !== conn.inGuild) {
                 await member.setNickname(username).catch(() => {});
                 await applyRoles(member, rank, inGuild);
                 conn.rank = rank;
                 conn.username = username;
                 conn.inGuild = inGuild;
+                conn.joined = joined;
                 saveConnections();
                 database.updateEntry(member);
             }

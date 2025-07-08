@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const connect = require('./connect');
 const database = require('./database');
+const { fetchWithRetry } = require('./hypixel');
 
 const MOD_ROLE_ID = process.env.MODERATOR_ROLE_ID;
 
@@ -18,7 +19,11 @@ try {
 }
 
 function saveHistory() {
-    fs.writeFileSync(historyPath, JSON.stringify(history, null, 2));
+    try {
+        fs.writeFileSync(historyPath, JSON.stringify(history, null, 2));
+    } catch (err) {
+        console.error('Failed to save guild XP history:', err);
+    }
 }
 
 function init(c) {
@@ -47,7 +52,7 @@ async function fetchGuildData() {
         throw new Error('Hypixel API or guild name not configured');
     }
     const url = `https://api.hypixel.net/guild?key=${apiKey}&name=${encodeURIComponent(guildName)}`;
-    const res = await fetch(url);
+    const res = await fetchWithRetry(url);
     const data = await res.json();
     if (!data.success || !data.guild) {
         throw new Error('Failed to fetch guild data');
@@ -61,7 +66,7 @@ async function fetchUsername(uuid) {
     if (nameCache[uuid]) return nameCache[uuid];
     const apiKey = process.env.HYPIXEL_API_KEY;
     const url = `https://api.hypixel.net/player?key=${apiKey}&uuid=${uuid}`;
-    const res = await fetch(url);
+    const res = await fetchWithRetry(url);
     const data = await res.json();
     if (!data.success || !data.player) {
         nameCache[uuid] = uuid;
@@ -210,8 +215,9 @@ let lastWeek = 0;
 function scheduleWeeklyReport() {
     const check = async () => {
         const now = new Date();
-        const week = getWeekNumber(now);
-        if (week !== lastWeek && now.getUTCDay() === 1) {
+        const ams = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Amsterdam' }));
+        const week = getWeekNumber(ams);
+        if (week !== lastWeek && ams.getDay() === 0 && ams.getHours() === 18) {
             lastWeek = week;
             try { await sendReport(); } catch { /* ignore */ }
         }
@@ -242,4 +248,12 @@ async function handleInteraction(interaction) {
     return false;
 }
 
-module.exports = { init, registerCommands, scheduleWeeklyReport, handleInteraction, history };
+module.exports = {
+    init,
+    registerCommands,
+    scheduleWeeklyReport,
+    handleInteraction,
+    history,
+    fetchGuildData,
+    fetchUsername
+};

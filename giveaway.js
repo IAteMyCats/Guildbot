@@ -40,7 +40,11 @@ function saveGiveaways() {
         const { interval, ...rest } = g;
         toSave.giveaways[id] = rest;
     }
-    fs.writeFileSync(giveawaysPath, JSON.stringify(toSave, null, 2));
+    try {
+        fs.writeFileSync(giveawaysPath, JSON.stringify(toSave, null, 2));
+    } catch (err) {
+        console.error('Failed to save giveaways:', err);
+    }
 }
 
 function init(c) {
@@ -426,7 +430,13 @@ async function handleInteraction(interaction) {
                 const buffer = Buffer.from(arrayBuffer);
                 const ext = path.extname(att.name) || '.png';
                 const filePath = path.join(proofDir, `${gid}_${wid}_${Date.now()}${ext}`);
-                fs.writeFileSync(filePath, buffer);
+                try {
+                    fs.writeFileSync(filePath, buffer);
+                } catch (err) {
+                    console.error('Failed to save proof file:', err);
+                    await interaction.reply({ content: 'Failed to save proof.', ephemeral: true });
+                    return true;
+                }
                 winner.proofs.push(filePath);
                 saveGiveaways();
                 await interaction.reply({ content: 'Proof saved.', ephemeral: true });
